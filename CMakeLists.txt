@@ -3,8 +3,12 @@ project(parallel_regex_engine)
 
 set(CMAKE_CXX_STANDARD 20)
 
+find_package(OpenMP REQUIRED)
+
 add_executable(parallel_regex_engine main.cpp
         RegexParser.cpp
         RegexParser.h
         Automata.cpp
         Automata.h)
+
+target_link_libraries(parallel_regex_engine OpenMP::OpenMP_CXX)

@@ -53,7 +53,6 @@ public:
 struct SFAState {
     std::vector<size_t> mapping;
     std::array<size_t, 256> transitions{};
-    bool accepting = false;
 
     SFAState() { transitions.fill(INVALID_STATE); }
 };
@@ -61,13 +60,15 @@ struct SFAState {
 class SFA {
 private:
     size_t initial_state = 0;
+    size_t initial_dfa_state = 0;
     std::vector<SFAState> states;
+    std::vector<size_t> accepting_dfa_states;
 public:
     void build(const DFA& dfa);
     [[nodiscard]] size_t step(size_t state, char c) const;
-    [[nodiscard]] bool accepts(const std::string& text) const;
+    [[nodiscard]] bool accepts_sequential(const std::string& text) const;
+    [[nodiscard]] bool accepts_parallel(const std::string& text) const;
     [[nodiscard]] size_t size() const;
-    [[nodiscard]] bool is_accepting(size_t state) const;
 };
 
 #endif //PARALLEL_REGEX_ENGINE_AUTOMATA_H

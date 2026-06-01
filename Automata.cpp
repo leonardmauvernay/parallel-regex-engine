@@ -1,3 +1,4 @@
+#include <omp.h>
 #include <map>
 #include <set>
 #include <stack>
@@ -172,7 +173,9 @@ void DFA::build(const NFA& nfa) {
 // correspondence construction
 void SFA::build(const DFA& dfa) {
     initial_state = 0;
+    initial_dfa_state = dfa.initial_state;
     states.clear();
+    accepting_dfa_states.clear();
 
     std::map<std::vector<size_t>, size_t> mapping_idx;
     std::stack<std::vector<size_t>> stack;
@@ -180,13 +183,13 @@ void SFA::build(const DFA& dfa) {
     std::vector<size_t> identity(dfa.size()); // state 0 is always the identity mapping
     for (size_t i = 0; i < dfa.size(); ++i) {
         identity[i] = i;
+        if (dfa.states[i].accepting) accepting_dfa_states.push_back(i); // use the same loop for efficiency
     }
     mapping_idx[identity] = 0;
     stack.push(identity);
 
     states.emplace_back();
     states[0].mapping = identity;
-    states[0].accepting = dfa.is_accepting(dfa.initial_state);
 
     while (!stack.empty()) {
         std::vector<size_t> current_mapping = stack.top();
@@ -204,7 +207,6 @@ void SFA::build(const DFA& dfa) {
                 stack.push(next_mapping);
                 states.emplace_back();
                 states.back().mapping = next_mapping;
-                states.back().accepting = dfa.is_accepting(next_mapping[dfa.initial_state]);
             }
 
             states[current_idx].transitions[c] = it->second;
@@ -219,19 +221,52 @@ size_t SFA::step(const size_t state, const char c) const {
     return states[state].transitions[static_cast<unsigned char>(c)];
 }
 
-bool SFA::accepts(const std::string& text) const {
+bool SFA::accepts_sequential(const std::string& text) const {
     size_t state = initial_state;
     for (const char c : text) {
         state = step(state, c);
-        if (state == INVALID_STATE) {
-            return false;
-        }
+        if (state == INVALID_STATE) return false;
     }
-    return is_accepting(state);
+
+    const size_t final_dfa_state = states[state].mapping[initial_dfa_state];
+    for (const size_t accepting_dfa_state : accepting_dfa_states) {
+        if (final_dfa_state == accepting_dfa_state) return true;
+    }
+    return false;
+}
+
+bool SFA::accepts_parallel(const std::string& text) const {
+    if (text.size() < 512) return accepts_sequential(text); // overhead of creating threads is too important for short strings
+
+    const int p = omp_get_max_threads();
+    std::vector<size_t> mappings(p);
+
+#pragma omp parallel num_threads(p)
+    {
+        size_t state = initial_state;
+        size_t i = text.size() * omp_get_thread_num() / p;
+        const size_t last = text.size() * (omp_get_thread_num() + 1) / p;
+
+        for (; i < last; ++i) {
+            state = step(state, text[i]);
+            if (state == INVALID_STATE) break;
+        }
+
+        mappings[omp_get_thread_num()] = state;
+    }
+
+    // sequential reduction like Sin'ya et al. (doesn't depend on the number of DFA states)
+    size_t state = initial_dfa_state;
+    for (const auto mapping : mappings) {
+        if (mapping == INVALID_STATE) return false;
+        state = states[mapping].mapping[state];
+        if (state == INVALID_STATE) return false;
+    }
+
+    for (const size_t accepting_dfa_state : accepting_dfa_states) {
+        if (state == accepting_dfa_state) return true;
+    }
+    return false;
 }
 
 size_t SFA::size() const { return states.size(); }
-
-bool SFA::is_accepting(const size_t state) const {
-    return state < size() && states[state].accepting;
-}

@@ -74,7 +74,7 @@ void NFA::build(const RegexNode* root) {
 }
 
 size_t DFA::step(const size_t state, const char c) const {
-    if (state >= states.size()) {
+    if (state >= size()) {
         return INVALID_STATE;
     }
     return states[state].transitions[static_cast<unsigned char>(c)];
@@ -88,10 +88,14 @@ bool DFA::accepts(const std::string& text) const {
             return false;
         }
     }
-    return states[state].accepting;
+    return is_accepting(state);
 }
 
 size_t DFA::size() const { return states.size(); }
+
+bool DFA::is_accepting(const size_t state) const {
+    return state < size() && states[state].accepting;
+}
 
 std::set<size_t> NFA::epsilon_closure(const std::set<size_t>& initial_states) const {
     std::set<size_t> res;
@@ -153,7 +157,7 @@ void DFA::build(const NFA& nfa) {
 
             std::set<size_t> next_closure = nfa.epsilon_closure(next_set);
 
-            auto [it, inserted] = set_idx.try_emplace(next_closure, states.size());
+            auto [it, inserted] = set_idx.try_emplace(next_closure, size());
             if (inserted) {
                 stack.push(next_closure);
                 states.emplace_back();
@@ -163,4 +167,71 @@ void DFA::build(const NFA& nfa) {
             states[current_idx].transitions[c] = it->second;
         }
     }
+}
+
+// correspondence construction
+void SFA::build(const DFA& dfa) {
+    initial_state = 0;
+    states.clear();
+
+    std::map<std::vector<size_t>, size_t> mapping_idx;
+    std::stack<std::vector<size_t>> stack;
+
+    std::vector<size_t> identity(dfa.size()); // state 0 is always the identity mapping
+    for (size_t i = 0; i < dfa.size(); ++i) {
+        identity[i] = i;
+    }
+    mapping_idx[identity] = 0;
+    stack.push(identity);
+
+    states.emplace_back();
+    states[0].mapping = identity;
+    states[0].accepting = dfa.is_accepting(dfa.initial_state);
+
+    while (!stack.empty()) {
+        std::vector<size_t> current_mapping = stack.top();
+        stack.pop();
+        const size_t current_idx = mapping_idx[current_mapping];
+
+        for (int c = 1; c < 256; ++c) { // start at 1 because 0 is epsilon
+            std::vector<size_t> next_mapping(dfa.size());
+            for (size_t i = 0; i < dfa.size(); ++i) {
+                next_mapping[i] = dfa.step(current_mapping[i], static_cast<char>(c));
+            }
+
+            auto [it, inserted] = mapping_idx.try_emplace(next_mapping, size());
+            if (inserted) {
+                stack.push(next_mapping);
+                states.emplace_back();
+                states.back().mapping = next_mapping;
+                states.back().accepting = dfa.is_accepting(next_mapping[dfa.initial_state]);
+            }
+
+            states[current_idx].transitions[c] = it->second;
+        }
+    }
+}
+
+size_t SFA::step(const size_t state, const char c) const {
+    if (state >= size()) {
+        return INVALID_STATE;
+    }
+    return states[state].transitions[static_cast<unsigned char>(c)];
+}
+
+bool SFA::accepts(const std::string& text) const {
+    size_t state = initial_state;
+    for (const char c : text) {
+        state = step(state, c);
+        if (state == INVALID_STATE) {
+            return false;
+        }
+    }
+    return is_accepting(state);
+}
+
+size_t SFA::size() const { return states.size(); }
+
+bool SFA::is_accepting(const size_t state) const {
+    return state < size() && states[state].accepting;
 }

@@ -36,6 +36,8 @@ struct DFAState {
 };
 
 class DFA {
+    friend class SFA;
+
 private:
     size_t initial_state = 0;
     std::vector<DFAState> states;
@@ -45,6 +47,27 @@ public:
     [[nodiscard]] size_t step(size_t state, char c) const;     // perform DFA transition
     [[nodiscard]] bool accepts(const std::string& text) const; // sequ DFA matcher
     [[nodiscard]] size_t size() const;                         // nb of DFA states
+    [[nodiscard]] bool is_accepting(size_t state) const;
+};
+
+struct SFAState {
+    std::vector<size_t> mapping;
+    std::array<size_t, 256> transitions{};
+    bool accepting = false;
+
+    SFAState() { transitions.fill(INVALID_STATE); }
+};
+
+class SFA {
+private:
+    size_t initial_state = 0;
+    std::vector<SFAState> states;
+public:
+    void build(const DFA& dfa);
+    [[nodiscard]] size_t step(size_t state, char c) const;
+    [[nodiscard]] bool accepts(const std::string& text) const;
+    [[nodiscard]] size_t size() const;
+    [[nodiscard]] bool is_accepting(size_t state) const;
 };
 
 #endif //PARALLEL_REGEX_ENGINE_AUTOMATA_H

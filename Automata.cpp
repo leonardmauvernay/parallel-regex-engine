@@ -175,7 +175,7 @@ void SFA::build(const DFA& dfa) {
     initial_state = 0;
     initial_dfa_state = dfa.initial_state;
     states.clear();
-    accepting_dfa_states.clear();
+    accepting_dfa_states.resize(dfa.size());
 
     std::map<std::vector<size_t>, size_t> mapping_idx;
     std::stack<std::vector<size_t>> stack;
@@ -183,7 +183,7 @@ void SFA::build(const DFA& dfa) {
     std::vector<size_t> identity(dfa.size()); // state 0 is always the identity mapping
     for (size_t i = 0; i < dfa.size(); ++i) {
         identity[i] = i;
-        if (dfa.states[i].accepting) accepting_dfa_states.push_back(i); // use the same loop for efficiency
+        accepting_dfa_states[i] = dfa.states[i].accepting; // use the same loop for efficiency
     }
     mapping_idx[identity] = 0;
     stack.push(identity);
@@ -229,10 +229,8 @@ bool SFA::accepts_sequential(const std::string& text) const {
     }
 
     const size_t final_dfa_state = states[state].mapping[initial_dfa_state];
-    for (const size_t accepting_dfa_state : accepting_dfa_states) {
-        if (final_dfa_state == accepting_dfa_state) return true;
-    }
-    return false;
+    if (final_dfa_state == INVALID_STATE) return false;
+    return accepting_dfa_states[final_dfa_state];
 }
 
 bool SFA::accepts_parallel(const std::string& text) const {
@@ -263,10 +261,7 @@ bool SFA::accepts_parallel(const std::string& text) const {
         if (state == INVALID_STATE) return false;
     }
 
-    for (const size_t accepting_dfa_state : accepting_dfa_states) {
-        if (state == accepting_dfa_state) return true;
-    }
-    return false;
+    return accepting_dfa_states[state];
 }
 
 size_t SFA::size() const { return states.size(); }

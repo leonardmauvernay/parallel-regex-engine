@@ -62,7 +62,7 @@ private:
     size_t initial_state = 0;
     size_t initial_dfa_state = 0;
     std::vector<SFAState> states;
-    std::vector<size_t> accepting_dfa_states;
+    std::vector<bool> accepting_dfa_states;
 public:
     void build(const DFA& dfa);
     [[nodiscard]] size_t step(size_t state, char c) const;
